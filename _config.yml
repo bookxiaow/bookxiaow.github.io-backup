@@ -1,15 +1,13 @@
 markdown: rdiscount
 permalink: /:title/
-url: http://github.thinkingbar.com
+url: http://github.bookxiaow.com
 #highlighter: pygments
 pygments: true
-name: 飘过的小牛
-description: 飘过的小牛 | Stop talking, start doing.
-author: niushuai
-email: hnns1990@gmail.com
-duoshuo: niushuai
-weibo: 1891858481
-hub: niushuai
+name: bookxiao, a coder 
+description: bookxiao | 记住犯过的错误，远比学习新知识更重要
+author: bookxiao 
+duoshuo:王书孝
+email: bookxiaow@gmail.com
 safe: true
 paginate: 100
-about: "弱菜一枚。"
+about: "NULL"
