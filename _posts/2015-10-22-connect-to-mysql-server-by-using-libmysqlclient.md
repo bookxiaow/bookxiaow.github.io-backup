@@ -16,6 +16,7 @@ C++程序访问MySQL服务器的重点在于两个：
 - [JDBC](http://www.oracle.com/technetwork/java/javase/jdbc/index.html)（Java Data Base Connectivity,java数据库连接）是一种用于执行SQL语句的Java API，可以为多种关系数据库提供统一访问，它由一组用Java语言编写的类和接口组成。
 
 MySQL实现了三种Connector用于C/C++ 客户端程序来访问MySQL服务器：
+
  - [Connector/ODBC](https://dev.mysql.com/downloads/connector/odbc/)
  - [Connector/C++](https://dev.mysql.com/downloads/connector/cpp/)(JDBC)
  - [Connector/C](https://dev.mysql.com/downloads/connector/c/)(libmysqlclient)
