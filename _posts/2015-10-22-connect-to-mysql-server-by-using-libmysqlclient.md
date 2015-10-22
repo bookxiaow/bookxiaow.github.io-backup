@@ -28,55 +28,71 @@ MySQL实现了三种Connector用于C/C++ 客户端程序来访问MySQL服务器�
 ###1 主要数据结构
 
 -  MYSQL
+
 mysql数据库连接句柄。在执行任何数据库操作之前首先就需要创建一个MYSQL结构。
 
 - MYSQL_RES
+
 执行查询语句（SELECT, SHOW, DESCRIBE, EXPLAIN）返回的结果。
 
 - MYSQL_ROW
+
 用来表示返回结果中的一行数据。由于每行数据格式不一致，因此使用此结构来统一表示。调用mysql_fetch_row()可从MYSQL_RES中返回一个MYSQL_ROW结构
 
 - MYSQL_FIELD
+
 用来表示一个field信息的元数据（元数据，即描述数据的数据），包括field name，field type以及field size等。MYSQL_FIELD不包含field的值（MYSQL_ROW真正保存各field的值）
 
 - MYSQL_FIELD_OFFSET
+
 field在row中的索引值，从0开始。
 
 ###2 主要API
 
 - mysql_init()
+
 	```
 	MYSQL *mysql_init(MYSQL *mysql)`
 	```
+
 	创建一个MYSQL对象。
 	
 - mysql_real_connect()
+
 	```
 	MYSQL *mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long client_flag);
 	```
+
 	连接到数据库服务器。
 	 
 - mysql_real_query()
+
 	```
 	int mysql_real_query(MYSQL *mysql, const char *stmt_str, unsigned long length);
 	```
+
 	执行MySQL语句stmt_str，成功返回0
 
 - mysql_store_result()
+
 	```
 	MYSQL_RES *mysql_store_result(MYSQL *mysql);
 	```
+
 	在执行完查询语句（mysql_store_result() or mysql_use_result()）后，调用此函数获得执行结果（result set）。如果执行正确且有结果返回，那么此函数返回非NULL的指针。
 		
 - mysql_affected_rows() 
+
 	```
 	my_ulonglong mysql_affected_rows(MYSQL *mysql);
 	```
+
 	如果执行的是UPDATE、INSERT和DELETE操作，那么MySQL会告诉你此操作影响了多少行（Rows）。调用此函数即能返回该值。有关在不同操作下此函数返回值的解释，详见[官方文档](https://dev.mysql.com/doc/refman/5.6/en/mysql-affected-rows.html)。在以下几种情况下函数会返回0：1）带有WHERE的UPDATE操作没有匹配任何行；2）调用之前没有执行任何query操作；3）对于SELECT操作，在调用mysql_store_reuslt()之前调用此函数。
 
 在三种情况下会返回NULL：1）执行的语句不是查询语句，例如INSERT/UPDATE等；2）有result set但读取出错（到server的连接出问题）；3）调用malloc为result set分配空间出错（result set太大）。第一种情况可通过**mysql_field_count**()是否返回0来判断；后两种情况可通过 mysql_error()返回非空字符串或者 mysql_errno() 返回大于0来判断。
 
 因此，一般情况下执行SQL语句的流程如下所示：
+
 ```
 MYSQL_RES *result;
 unsigned int num_fields;
@@ -211,6 +227,7 @@ int main()
 以下是编译运行结果：
 
 首先写个简单的makefile：
+
 ```
 #Makefile 
 test:test.cpp
@@ -222,9 +239,11 @@ test:test.cpp
 clean:
 	rm -f *.o test
 ```
+
 其中，可以使用mysql_config工具来获得安装Connector时候的头文件位置和库文件位置（[详见官方文档](http://dev.mysql.com/doc/refman/5.6/en/c-api-building-clients.html)）。
 
 编译运行结果：
+
 ```
 $ make
 g++ -c `mysql_config --cflags` test.cpp
@@ -256,9 +275,11 @@ tid	sid		name
 123	54321	haha
 ----------------------------
 ```
+
 可以看到，对于UPDATE操作，如果设置的值与原来的值一样，那么`mysql_affected_rows`返回的是0。
 
 可以对比以下我们的测试程序的输出结果和mysql命令行工具的输出结果：
+
 ```
 mysql> select * from table1;
 +-----+-------+------+
@@ -286,5 +307,7 @@ mysql> select * from table1;
 ```
 
 在运行可执行文件时提示
+
 "./test: /usr/lib/x86_64-linux-gnu/libmysqlclient.so.18: no version information available (required by ./test)"
+
 猜测可能是因为Connector库版本和mysql server版本不一致导致，但貌似不影响程序的执行，暂不管他了。
