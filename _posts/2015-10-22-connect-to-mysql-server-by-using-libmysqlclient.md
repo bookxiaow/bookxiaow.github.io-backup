@@ -51,41 +51,41 @@ field在row中的索引值，从0开始。
 
 - mysql_init()
 
-	```cpp
+	{% highlight c %}
 	MYSQL *mysql_init(MYSQL *mysql)`
-	```
+	{% endhighlight %}
 
 	创建一个MYSQL对象。
 	
 - mysql_real_connect()
 
-	```cpp
+	{% highlight c %}
 	MYSQL *mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long client_flag);
-	```
+	{% endhighlight %}
 
 	连接到数据库服务器。
 	 
 - mysql_real_query()
 
-	```cpp
+	{% highlight c %}
 	int mysql_real_query(MYSQL *mysql, const char *stmt_str, unsigned long length);
-	```
+	{% endhighlight %}
 
 	执行MySQL语句stmt_str，成功返回0
 
 - mysql_store_result()
 
-	```cpp
+	{% highlight c %}
 	MYSQL_RES *mysql_store_result(MYSQL *mysql);
-	```
+	{% endhighlight %}
 
 	在执行完查询语句（mysql_store_result() or mysql_use_result()）后，调用此函数获得执行结果（result set）。如果执行正确且有结果返回，那么此函数返回非NULL的指针。
 		
 - mysql_affected_rows() 
 
-	```cpp
+	{% highlight c %}
 	my_ulonglong mysql_affected_rows(MYSQL *mysql);
-	```
+	{% endhighlight %}
 
 	如果执行的是UPDATE、INSERT和DELETE操作，那么MySQL会告诉你此操作影响了多少行（Rows）。调用此函数即能返回该值。有关在不同操作下此函数返回值的解释，详见[官方文档](https://dev.mysql.com/doc/refman/5.6/en/mysql-affected-rows.html)。在以下几种情况下函数会返回0：1）带有WHERE的UPDATE操作没有匹配任何行；2）调用之前没有执行任何query操作；3）对于SELECT操作，在调用mysql_store_reuslt()之前调用此函数。
 
@@ -93,7 +93,7 @@ field在row中的索引值，从0开始。
 
 因此，一般情况下执行SQL语句的流程如下所示：
 
-```cpp
+{% highlight c linenos %}
 MYSQL_RES *result;
 unsigned int num_fields;
 unsigned int num_rows;
@@ -124,7 +124,7 @@ else // query succeeded, process any data returned by it
         }
     }
 }
-```
+{% endhighlight %}
 
 ### 3 解析返回结果
 
@@ -132,7 +132,7 @@ else // query succeeded, process any data returned by it
 
 先来看一个示例：
 
-```cpp
+{% highlight c linenos %}
 #include <mysql.h>
 #include <string>
 #include <stdio.h>
@@ -217,7 +217,7 @@ int main()
 	mysql_close(&mysql);
 	return 0;
 }
-```
+{% endhighlight %}
 
 可以看到，从MYSQL_RES中获取结果依靠的是两个函数：
 
@@ -228,7 +228,7 @@ int main()
 
 首先写个简单的makefile：
 
-```mf
+{% highlight mf linenos %}
 # Makefile
 test:test.cpp
 	g++ -c `mysql_config --cflags` test.cpp
@@ -238,13 +238,13 @@ test:test.cpp
 
 clean:
 	rm -f *.o test
-```
+{% endhighlight %}
 
 其中，可以使用mysql_config工具来获得安装Connector时候的头文件位置和库文件位置（[详见官方文档](http://dev.mysql.com/doc/refman/5.6/en/c-api-building-clients.html)）。
 
 编译运行结果：
 
-```sh
+{% highlight bash %}
 $ make
 g++ -c `mysql_config --cflags` test.cpp
 g++ -o test test.o `mysql_config --libs`
@@ -274,13 +274,13 @@ result: 1 rows  3 fields
 tid	sid		name	
 123	54321	haha
 ----------------------------
-```
+{% endhighlight %}
 
 可以看到，对于UPDATE操作，如果设置的值与原来的值一样，那么`mysql_affected_rows`返回的是0。
 
 可以对比以下我们的测试程序的输出结果和mysql命令行工具的输出结果：
 
-```sh
+{% highlight bash %}
 mysql> select * from table1;
 +-----+-------+------+
 | tid | sid   | name |
@@ -304,7 +304,7 @@ mysql> select * from table1;
 | 123 | 54312 | haha |
 +-----+-------+------+
 1 row in set (0.00 sec)
-```
+{% endhighlight %}
 
 在运行可执行文件时提示
 
