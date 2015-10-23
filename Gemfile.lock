@@ -132,6 +132,7 @@ PLATFORMS
 
 DEPENDENCIES
   github-pages
+  redcarpet
   therubyracer
 
 BUNDLED WITH

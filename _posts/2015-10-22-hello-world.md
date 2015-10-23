@@ -9,7 +9,7 @@ This is my new blog.
 
 test code:
 
-{% highlight c %}
+```c
 #include <stdio.h>
 
 #define N 10
@@ -21,6 +21,6 @@ int main()
 
 	return 0;
 }
-{% endhighlight %}
+```
 
 Have a nice day!

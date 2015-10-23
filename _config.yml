@@ -1,4 +1,7 @@
-markdown: rdiscount 
+markdown: redcarpet 
+redcarpet:
+  extensions: [fenced_code_blocks]
+  render_options:
 permalink: /:title/
 url: http://github.bookxiaow.com
 #highlighter: pygments
