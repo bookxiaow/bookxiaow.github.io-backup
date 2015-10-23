@@ -9,8 +9,10 @@ url: http://github.bookxiaow.com
 name: bookxiao, a coder 
 description: bookxiao | 记住犯过的错误，远比学习新知识更重要
 author: bookxiao 
+hub: bookxiaow
 duoshuo: bookxiao
 email: bookxiaow@gmail.com
+csdn: http://blog.csdn.net/shuxiaogd
 safe: true
 paginate: 100
 about: "NULL"
