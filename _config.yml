@@ -2,7 +2,7 @@ markdown: rdiscount
 permalink: /:title/
 url: http://github.bookxiaow.com
 #highlighter: pygments
-pygments: true
+#pygments: true
 name: bookxiao, a coder 
 description: bookxiao | 记住犯过的错误，远比学习新知识更重要
 author: bookxiao 

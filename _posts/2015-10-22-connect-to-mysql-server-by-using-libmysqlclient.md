@@ -51,7 +51,7 @@ field在row中的索引值，从0开始。
 
 - mysql_init()
 
-	```
+	```cpp
 	MYSQL *mysql_init(MYSQL *mysql)`
 	```
 
@@ -59,7 +59,7 @@ field在row中的索引值，从0开始。
 	
 - mysql_real_connect()
 
-	```
+	```cpp
 	MYSQL *mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long client_flag);
 	```
 
@@ -67,7 +67,7 @@ field在row中的索引值，从0开始。
 	 
 - mysql_real_query()
 
-	```
+	```cpp
 	int mysql_real_query(MYSQL *mysql, const char *stmt_str, unsigned long length);
 	```
 
@@ -75,7 +75,7 @@ field在row中的索引值，从0开始。
 
 - mysql_store_result()
 
-	```
+	```cpp
 	MYSQL_RES *mysql_store_result(MYSQL *mysql);
 	```
 
@@ -83,7 +83,7 @@ field在row中的索引值，从0开始。
 		
 - mysql_affected_rows() 
 
-	```
+	```cpp
 	my_ulonglong mysql_affected_rows(MYSQL *mysql);
 	```
 
@@ -93,7 +93,7 @@ field在row中的索引值，从0开始。
 
 因此，一般情况下执行SQL语句的流程如下所示：
 
-```
+```cpp
 MYSQL_RES *result;
 unsigned int num_fields;
 unsigned int num_rows;
@@ -132,7 +132,7 @@ else // query succeeded, process any data returned by it
 
 先来看一个示例：
 
-```
+```cpp
 #include <mysql.h>
 #include <string>
 #include <stdio.h>
@@ -228,8 +228,8 @@ int main()
 
 首先写个简单的makefile：
 
-```
-#Makefile 
+```mf
+# Makefile
 test:test.cpp
 	g++ -c `mysql_config --cflags` test.cpp
 	g++ -o test test.o `mysql_config --libs`
@@ -244,7 +244,7 @@ clean:
 
 编译运行结果：
 
-```
+```sh
 $ make
 g++ -c `mysql_config --cflags` test.cpp
 g++ -o test test.o `mysql_config --libs`
@@ -280,7 +280,7 @@ tid	sid		name
 
 可以对比以下我们的测试程序的输出结果和mysql命令行工具的输出结果：
 
-```
+```sh
 mysql> select * from table1;
 +-----+-------+------+
 | tid | sid   | name |

@@ -6,3 +6,21 @@ tags: 开博客啦
 ---
 
 This is my new blog.
+
+test code:
+
+{% highlight c %}
+#include <stdio.h>
+
+#define N 10
+
+int main()
+{
+	int a = N;
+	printf("hello, world!");
+
+	return 0;
+}
+{% endhighlight %}
+
+Have a nice day!
