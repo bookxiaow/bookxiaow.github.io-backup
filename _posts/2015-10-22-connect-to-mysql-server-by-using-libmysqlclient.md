@@ -27,69 +27,83 @@ MySQL实现了三种Connector用于C/C++ 客户端程序来访问MySQL服务器�
 
 ###1 主要数据结构
 
--  MYSQL
+**MYSQL**
 
 mysql数据库连接句柄。在执行任何数据库操作之前首先就需要创建一个MYSQL结构。
 
-- MYSQL_RES
+**MYSQL\_RES**
 
 执行查询语句（SELECT, SHOW, DESCRIBE, EXPLAIN）返回的结果。
 
-- MYSQL_ROW
+**MYSQL\_ROW**
 
-用来表示返回结果中的一行数据。由于每行数据格式不一致，因此使用此结构来统一表示。调用mysql_fetch_row()可从MYSQL_RES中返回一个MYSQL_ROW结构
+用来表示返回结果中的一行数据。由于每行数据格式不一致，因此使用此结构来统一表示。调用`mysql_fetch_row()`可从MYSQL_RES中返回一个MYSQL_ROW结构
 
-- MYSQL_FIELD
+**MYSQL\_FIELD**
 
-用来表示一个field信息的元数据（元数据，即描述数据的数据），包括field name，field type以及field size等。MYSQL_FIELD不包含field的值（MYSQL_ROW真正保存各field的值）
+用来表示一个field信息的元数据（元数据，即描述数据的数据），包括field name，field type以及field size等。`MYSQL_FIELD`不包含field的值（`MYSQL_ROW`真正保存各field的值）
 
-- MYSQL_FIELD_OFFSET
+**MYSQL\_FIELD\_OFFSET**
 
 field在row中的索引值，从0开始。
 
 ###2 主要API
 
-- mysql_init()
+**mysql\_init**
 
 	{% highlight c %}
-	MYSQL *mysql_init(MYSQL *mysql)`
+	MYSQL *mysql_init(MYSQL *mysql)
 	{% endhighlight %}
 
-	创建一个MYSQL对象。
+创建一个MYSQL对象。
 	
-- mysql_real_connect()
+**mysql\_real\_connect**
 
 	{% highlight c %}
 	MYSQL *mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long client_flag);
 	{% endhighlight %}
 
-	连接到数据库服务器。
+连接到数据库服务器。
 	 
-- mysql_real_query()
+**mysql\_real\_query**
 
 	{% highlight c %}
 	int mysql_real_query(MYSQL *mysql, const char *stmt_str, unsigned long length);
 	{% endhighlight %}
 
-	执行MySQL语句stmt_str，成功返回0
+执行MySQL语句`stmt_str`，成功返回0
 
-- mysql_store_result()
+**mysql\_store\_result**
 
 	{% highlight c %}
 	MYSQL_RES *mysql_store_result(MYSQL *mysql);
 	{% endhighlight %}
 
-	在执行完查询语句（mysql_store_result() or mysql_use_result()）后，调用此函数获得执行结果（result set）。如果执行正确且有结果返回，那么此函数返回非NULL的指针。
+在执行完查询语句（`mysql_store_result`or `mysql_use_result`）后，调用此函数获得执行结果（result set）。如果执行正确且有结果返回，那么此函数返回非NULL的指针。
 		
-- mysql_affected_rows() 
+**mysql\_affected\_rows**
 
 	{% highlight c %}
 	my_ulonglong mysql_affected_rows(MYSQL *mysql);
 	{% endhighlight %}
 
-	如果执行的是UPDATE、INSERT和DELETE操作，那么MySQL会告诉你此操作影响了多少行（Rows）。调用此函数即能返回该值。有关在不同操作下此函数返回值的解释，详见[官方文档](https://dev.mysql.com/doc/refman/5.6/en/mysql-affected-rows.html)。在以下几种情况下函数会返回0：1）带有WHERE的UPDATE操作没有匹配任何行；2）调用之前没有执行任何query操作；3）对于SELECT操作，在调用mysql_store_reuslt()之前调用此函数。
+如果执行的是UPDATE、INSERT和DELETE操作，那么MySQL会告诉你此操作影响了多少行（Rows）。调用此函数即能返回该值。
 
-在三种情况下会返回NULL：1）执行的语句不是查询语句，例如INSERT/UPDATE等；2）有result set但读取出错（到server的连接出问题）；3）调用malloc为result set分配空间出错（result set太大）。第一种情况可通过**mysql_field_count**()是否返回0来判断；后两种情况可通过 mysql_error()返回非空字符串或者 mysql_errno() 返回大于0来判断。
+>有关在不同操作下此函数返回值的解释，详见[官方文档](https://dev.mysql.com/doc/refman/5.6/en/mysql-affected-rows.html)。
+
+在以下几种情况下函数会返回0 ：
+
+1）带有WHERE的UPDATE操作没有匹配任何行；
+2）调用之前没有执行任何query操作；
+3）对于SELECT操作，在调用`mysql_store_reuslt`之前调用此函数。
+
+在三种情况下`mysql_store_result`会返回NULL：
+
+1）执行的语句不是查询语句，例如INSERT/UPDATE等；
+2）有result set但读取出错（到server的连接出问题）；
+3）调用malloc为result set分配空间出错（result set太大）。
+
+第一种情况可通过`mysql_field_count()`是否返回0来判断；后两种情况可通过 `mysql_error()`返回非空字符串或者 返回大于0来判断。
 
 因此，一般情况下执行SQL语句的流程如下所示：
 
@@ -128,7 +142,7 @@ else // query succeeded, process any data returned by it
 
 ### 3 解析返回结果
 
-在上一节，假定我们成功地执行了语句，并获得了结果（MYSQL_RES结构）。那么怎么从MYSQL_RES中解析出我们想要的东西呢？
+在上一节，假定我们成功地执行了语句，并获得了结果（`MYSQL_RES`结构）。那么怎么从`MYSQL_RES`中解析出我们想要的东西呢？
 
 先来看一个示例：
 
@@ -219,10 +233,10 @@ int main()
 }
 {% endhighlight %}
 
-可以看到，从MYSQL_RES中获取结果依靠的是两个函数：
+可以看到，从`MYSQL_RES`中获取结果依靠的是两个函数：
 
-- mysql_fetch_fields() 获取field元数据
-- mysql_fetch_rows() 获取每一行的数据。每调用一次，该MYSQL_RES的row offset自动增1，因此可以在while循环中调用此函数，直到返回NULL。
+- `mysql_fetch_fields()` 获取field元数据
+- `mysql_fetch_rows()`获取每一行的数据。每调用一次，该`MYSQL_RES`的row offset自动增1，因此可以在while循环中调用此函数，直到返回NULL。
 
 以下是编译运行结果：
 
@@ -240,7 +254,7 @@ clean:
 	rm -f *.o test
 {% endhighlight %}
 
-其中，可以使用mysql_config工具来获得安装Connector时候的头文件位置和库文件位置（[详见官方文档](http://dev.mysql.com/doc/refman/5.6/en/c-api-building-clients.html)）。
+其中，可以使用`mysql_config`工具来获得安装Connector时候的头文件位置和库文件位置（[详见官方文档](http://dev.mysql.com/doc/refman/5.6/en/c-api-building-clients.html)）。
 
 编译运行结果：
 

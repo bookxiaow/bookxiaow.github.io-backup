@@ -1,11 +1,9 @@
 markdown: redcarpet 
 redcarpet:
-  extensions: [fenced_code_blocks]
-  render_options:
+  extensions: [fenced_code_blocks, with_toc_data]
 permalink: /:title/
 url: http://github.bookxiaow.com
-#highlighter: pygments
-#pygments: true
+highlighter: pygments
 name: bookxiao, a coder 
 description: bookxiao | 记住犯过的错误，远比学习新知识更重要
 author: bookxiao 

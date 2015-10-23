@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/media/css/style.css" />
     <link rel="stylesheet" href="/media/css/highlight.css" media="all"/>
     <script type="text/javascript" src="/media/js/jquery-1.7.1.min.js"></script>
+	<script type="text/javascript" src="/media/js/toc.js"></script>
   </head>
   <body>
     <div id="container">
@@ -26,7 +27,9 @@
           <span><a title="关于站长" class="" href="/about/">关于</a></span>
         </nav>
         <article class="content">
-          {{ content }}
+		  <div id="toc">
+            {{ content }}
+		  </div>
         </article>
       </div>
 
@@ -37,5 +40,10 @@
       </footer>
 
     </div>
+	<script type="text/javascript">
+	$(document).ready(function() {
+	  $('#toc').toc();
+	});
+	</script>
   </body>
 </html>
