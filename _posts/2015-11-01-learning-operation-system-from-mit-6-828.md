@@ -18,8 +18,16 @@ tags: 操作系统
 
 ##参考资料
 
-https://pdos.csail.mit.edu/6.828/2014/xv6.html
+xv6是MIT为教学而开发的操作系统，不仅开放了源代码，并且还提供了学习教材：
 
-https://pdos.csail.mit.edu/6.828/2014/schedule.html
+[MIT xv6](https://pdos.csail.mit.edu/6.828/2014/xv6.html)
 
-https://pdos.csail.mit.edu/6.828/2014/reference.html
+**目标1**：读懂xv6每一方代码，并且试着修改源码并测试。
+
+有关如何搭建xv6编译环境，可以参考：
+
+[搭建xv6编译环境](https://pdos.csail.mit.edu/6.828/2014/tools.html)
+
+此外，xv6也是MIT操作系统课程的参考OS，该课程的资料如下：
+
+[6.828 Schedule](https://pdos.csail.mit.edu/6.828/2014/schedule.html)
