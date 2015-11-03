@@ -48,6 +48,173 @@ mysql_ping(MYSQL *mysql)
 }
 ```
 
+继续跟踪`simple_command`:
+
+```c
+#define simple_command(mysql, command, arg, length, skip_check) \
+  ((mysql)->methods \
+    ? (*(mysql)->methods->advanced_command)(mysql, command, 0, \
+                                            0, arg, length, skip_check, NULL) \
+    : (set_mysql_error(mysql, CR_COMMANDS_OUT_OF_SYNC, unknown_sqlstate), 1))
+```
+
+`(mysql)->methods`是一组函数指针，它的`advanced_command`结构体变量应该被初始化为`cli_advanced_command`(`static MYSQL_METHODS client_methods`):
+
+```c
+my_bool
+cli_advanced_command(MYSQL *mysql, enum enum_server_command command,
+		     const uchar *header, size_t header_length,
+		     const uchar *arg, size_t arg_length, my_bool skip_check,
+                     MYSQL_STMT *stmt)
+{
+  NET *net= &mysql->net;
+  my_bool result= 1;
+  my_bool stmt_skip= stmt ? stmt->state != MYSQL_STMT_INIT_DONE : FALSE;
+  DBUG_ENTER("cli_advanced_command");
+
+  if (mysql->net.vio == 0)
+  {						/* Do reconnect if possible */
+    if (mysql_reconnect(mysql) || stmt_skip)
+      DBUG_RETURN(1);
+  }
+  if (mysql->status != MYSQL_STATUS_READY ||
+      mysql->server_status & SERVER_MORE_RESULTS_EXISTS)
+  {
+    DBUG_PRINT("error",("state: %d", mysql->status));
+    set_mysql_error(mysql, CR_COMMANDS_OUT_OF_SYNC, unknown_sqlstate);
+    DBUG_RETURN(1);
+  }
+
+  net_clear_error(net);
+  mysql->info=0;
+  mysql->affected_rows= ~(my_ulonglong) 0;
+  /*
+    Do not check the socket/protocol buffer on COM_QUIT as the
+    result of a previous command might not have been read. This
+    can happen if a client sends a query but does not reap the
+    result before attempting to close the connection.
+  */
+  net_clear(&mysql->net, (command != COM_QUIT));
+
+  MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
+  MYSQL_TRACE(SEND_COMMAND, mysql, (command, header_length, arg_length, header, arg));
+
+#if !defined(EMBEDDED_LIBRARY)
+  /*
+    If auto-reconnect mode is enabled check if connection is still alive before
+    sending new command. Otherwise, send() might not notice that connection was
+    closed by the server (for example, due to KILL statement), and the fact that
+    connection is gone will be noticed only on attempt to read command's result,
+    when it is too late to reconnect. Note that such scenario can still occur if
+    connection gets killed after this check but before command is sent to
+    server. But this should be rare.
+  */
+  if ((command != COM_QUIT) && mysql->reconnect && !vio_is_connected(net->vio))
+    net->error= 2;
+#endif
+
+  if (net_write_command(net,(uchar) command, header, header_length,
+			arg, arg_length))
+  {
+    DBUG_PRINT("error",("Can't send command to server. Error: %d",
+			socket_errno));
+    if (net->last_errno == ER_NET_PACKET_TOO_LARGE)
+    {
+      set_mysql_error(mysql, CR_NET_PACKET_TOO_LARGE, unknown_sqlstate);
+      goto end;
+    }
+    end_server(mysql);
+    if (mysql_reconnect(mysql) || stmt_skip)
+      goto end;
+    
+    MYSQL_TRACE(SEND_COMMAND, mysql, (command, header_length, arg_length, header, arg));
+    if (net_write_command(net,(uchar) command, header, header_length,
+			  arg, arg_length))
+    {
+      set_mysql_error(mysql, CR_SERVER_GONE_ERROR, unknown_sqlstate);
+      goto end;
+    }
+  }
+
+  MYSQL_TRACE(PACKET_SENT, mysql, (header_length + arg_length)); 
+
+#if defined(CLIENT_PROTOCOL_TRACING)
+  switch (command)
+  {
+  case COM_STMT_PREPARE:
+    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_PS_DESCRIPTION);
+    break;
+
+  case COM_STMT_FETCH:
+    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_ROW);
+    break;
+
+  /* 
+    No server reply is expected after these commands so we reamin ready
+    for the next command.
+ */
+  case COM_STMT_SEND_LONG_DATA: 
+  case COM_STMT_CLOSE:
+  case COM_REGISTER_SLAVE:
+  case COM_QUIT:
+    break;
+
+  /*
+    These replication commands are not supported and we bail out
+    by pretending that connection has been closed.
+  */
+  case COM_BINLOG_DUMP:
+  case COM_BINLOG_DUMP_GTID:
+  case COM_TABLE_DUMP:
+    MYSQL_TRACE(DISCONNECTED, mysql, ());
+    break;
+
+  /*
+    After COM_CHANGE_USER a regular authentication exchange
+    is performed.
+  */
+  case COM_CHANGE_USER:
+    MYSQL_TRACE_STAGE(mysql, AUTHENTICATE);
+    break;
+
+  /*
+    Server replies to COM_STATISTICS with a single packet 
+    containing a string with statistics information.
+  */
+  case COM_STATISTICS:
+    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_PACKET);
+    break;
+
+  /*
+    For all other commands we expect server to send regular reply which
+    is either OK, ERR or a result-set header.
+  */
+  default: MYSQL_TRACE_STAGE(mysql, WAIT_FOR_RESULT); break;
+  }
+#endif
+
+  result=0;
+  if (!skip_check)
+  {
+    result= ((mysql->packet_length= cli_safe_read_with_ok(mysql, 1, NULL)) ==
+             packet_error ? 1 : 0);
+
+#if defined(CLIENT_PROTOCOL_TRACING)
+    /*
+      Return to READY_FOR_COMMAND protocol stage in case server reports error 
+      or sends OK packet.
+    */
+    if (!result || mysql->net.read_pos[0] == 0x00)
+      MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
+#endif
+  }
+
+end:
+  DBUG_PRINT("exit",("result: %d", result));
+  DBUG_RETURN(result);
+}
+```
+
 #2 异步mysql_query
 
 #3 示例
