@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 使用异步libmysqlclient连接MySQL Server  
+title: 异步调用mysql_ping来检查MySQL Server状态
 categories: mysql 
 tags: mysql
 ---
@@ -33,7 +33,7 @@ DB\_Proxy的一种设计方案是：主线程使用epoll或libevent接收Client�
 
 #1 异步mysql\_ping
 
-下载一份libmysqlclient的源码，找到`mysql_ping`的源码实现，如下：
+下载一份[libmysqlclient的源码](http://downloads.mysql.com/archives/get/file/mysql-connector-c-6.1.5-src.tar.gz)，找到`mysql_ping`的源码实现，如下：
 
 ```c
 int STDCALL
@@ -58,7 +58,9 @@ mysql_ping(MYSQL *mysql)
     : (set_mysql_error(mysql, CR_COMMANDS_OUT_OF_SYNC, unknown_sqlstate), 1))
 ```
 
-`(mysql)->methods`是一组函数指针，它的`advanced_command`结构体变量应该被初始化为`cli_advanced_command`(`static MYSQL_METHODS client_methods`):
+这个宏调用了存放在`mysql->methods`里面的函数指针，不能继续跟踪下去了，除非知道这个指针被设置成了什么值。
+
+全文搜索一下找到这么一个静态变量`static MYSQL_METHODS client_methods`。应该就是这个了。
 
 ```c
 my_bool
@@ -99,20 +101,6 @@ cli_advanced_command(MYSQL *mysql, enum enum_server_command command,
   MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
   MYSQL_TRACE(SEND_COMMAND, mysql, (command, header_length, arg_length, header, arg));
 
-#if !defined(EMBEDDED_LIBRARY)
-  /*
-    If auto-reconnect mode is enabled check if connection is still alive before
-    sending new command. Otherwise, send() might not notice that connection was
-    closed by the server (for example, due to KILL statement), and the fact that
-    connection is gone will be noticed only on attempt to read command's result,
-    when it is too late to reconnect. Note that such scenario can still occur if
-    connection gets killed after this check but before command is sent to
-    server. But this should be rare.
-  */
-  if ((command != COM_QUIT) && mysql->reconnect && !vio_is_connected(net->vio))
-    net->error= 2;
-#endif
-
   if (net_write_command(net,(uchar) command, header, header_length,
 			arg, arg_length))
   {
@@ -138,75 +126,11 @@ cli_advanced_command(MYSQL *mysql, enum enum_server_command command,
 
   MYSQL_TRACE(PACKET_SENT, mysql, (header_length + arg_length)); 
 
-#if defined(CLIENT_PROTOCOL_TRACING)
-  switch (command)
-  {
-  case COM_STMT_PREPARE:
-    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_PS_DESCRIPTION);
-    break;
-
-  case COM_STMT_FETCH:
-    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_ROW);
-    break;
-
-  /* 
-    No server reply is expected after these commands so we reamin ready
-    for the next command.
- */
-  case COM_STMT_SEND_LONG_DATA: 
-  case COM_STMT_CLOSE:
-  case COM_REGISTER_SLAVE:
-  case COM_QUIT:
-    break;
-
-  /*
-    These replication commands are not supported and we bail out
-    by pretending that connection has been closed.
-  */
-  case COM_BINLOG_DUMP:
-  case COM_BINLOG_DUMP_GTID:
-  case COM_TABLE_DUMP:
-    MYSQL_TRACE(DISCONNECTED, mysql, ());
-    break;
-
-  /*
-    After COM_CHANGE_USER a regular authentication exchange
-    is performed.
-  */
-  case COM_CHANGE_USER:
-    MYSQL_TRACE_STAGE(mysql, AUTHENTICATE);
-    break;
-
-  /*
-    Server replies to COM_STATISTICS with a single packet 
-    containing a string with statistics information.
-  */
-  case COM_STATISTICS:
-    MYSQL_TRACE_STAGE(mysql, WAIT_FOR_PACKET);
-    break;
-
-  /*
-    For all other commands we expect server to send regular reply which
-    is either OK, ERR or a result-set header.
-  */
-  default: MYSQL_TRACE_STAGE(mysql, WAIT_FOR_RESULT); break;
-  }
-#endif
-
   result=0;
   if (!skip_check)
   {
     result= ((mysql->packet_length= cli_safe_read_with_ok(mysql, 1, NULL)) ==
              packet_error ? 1 : 0);
-
-#if defined(CLIENT_PROTOCOL_TRACING)
-    /*
-      Return to READY_FOR_COMMAND protocol stage in case server reports error 
-      or sends OK packet.
-    */
-    if (!result || mysql->net.read_pos[0] == 0x00)
-      MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
-#endif
   }
 
 end:
@@ -215,6 +139,67 @@ end:
 }
 ```
 
-#2 异步mysql_query
+MySQL Client和 MySQL Server之间依据MySQL协议进行数据传输。而`cli_advanced_command`函数就是用来实现数据传输功能的。
 
-#3 示例
+先看一下函数的参数：
+
+- `MYSQL *mysql` mysql句柄，包含有关连接的所有信息，例如连接socket，连接状态等等
+- `enum enum_server_command command` 命令码，例如连接/查询/建表/删表等等
+- `const uchar *header, size_t header_length` 头部信息
+- `const uchar *arg, size_t arg_length` 附加参数
+- `my_bool skip_check` 标志位，是否等待返回
+- `MYSQL_STMT *stmt` 略过
+
+可以看出来，MySQL协议消息是由3部分组成：
+
+| 命令码 | 头部 | 参数 |
+| --- | --- | --- |
+
+再看函数体，
+
+- 首先，检查连接状态 
+- 接着，调用`net_write_command`发送消息
+- 最后，如果`skip_check`为false，那么调用`cli_safe_read_with_ok`读取返回结果
+
+所以，要实现异步`mysql_ping_async`的第一步就是，设置`skip_check`参数为true来调用`simple_command`,这样就只发送数据：
+
+```c
+int STDCALL
+mysql_ping_async(MYSQL *mysql)
+{
+    int res; 
+    DBUG_ENTER("mysql_ping_async");
+    res = simple_command(mysql, COM_PING, 0, 0, 1);
+    DBUG_RETURN(res);
+}
+```
+
+接着，提供接口来读取ping的结果：
+
+```c
+int STDCALL
+mysql_read_ping(MYSQL *mysql)
+{
+	int res; 
+	DBUG_ENTER("mysql_read_ping");
+	res = cli_safe_read_with_ok(mysql, 1, NULL);
+	return (res == packet_error) ? 1 : 0; 
+}
+```
+
+最后，要在epoll/libevent中监听ping的结果，我们需要知道到Server的TCP连接的fd。
+
+```c
+int get_mysql_fd(MYSQL *mysql)
+{
+	return mysql->net.fd;
+}
+```
+
+最后，就可以编译出新的libmysqlclient.so文件。
+
+#2 示例
+
+有了异步的`mysql_ping_async`我们就可以在epoll/libevent中定期监测MySQL Server了。
+
+Todo
