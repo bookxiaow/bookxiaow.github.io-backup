@@ -1,40 +1,40 @@
 ---
 layout: post
-title: Linux�ں�֮�ļ�ϵͳѧϰ�ʼǣ�1����ʶ�ļ�ϵͳ
+title: Linux内核之文件系统学习笔记（1）认识文件系统
 categories: Linux_kernel
 tags: Linux kernel filesystem
 ---
 
-��Linux�±�̸��ں˴򽻵�����Ƶ���ķ�ʽ���ƾ��ǲ����ļ��ˡ�˭��Linux��ѭ��һ�н��ļ�����˼���ء�
+在Linux下编程跟内核打交道的最频繁的方式估计就是操作文件了。谁让Linux遵循“一切皆文件”的思想呢。
 
-��ˣ�����ѧϰLinux�ں˵ĵ�һ�������Լ�������дһ���򵥵��ļ�ϵͳsamplefs��ϣ������ܹ�����Linux�ں˵Ĵ��š�
+因此，咱们学习Linux内核的第一步就是自己动手来写一个简单的文件系统samplefs，希望藉此能够跨入Linux内核的大门。
 
-# ʲô���ļ�ϵͳ
+# 什么是文件系统
 
-�й��ļ�ϵͳ�ĸ�������ںܶ����ϵͳ�Ľ̲��Ͽ�����һ�����������ܵģ�
+有关文件系统的概念，可以在很多操作系统的教材上看到。一般是这样介绍的：
 
-**����**�Ӽ�����洢�Ĳ�νṹ���潲�𣬴洢���ʰ������ٶȣ������ڽ��ʺ�Ѱַ��ʽ���������η�Ϊ��
+**首先**从计算机存储的层次结构方面讲起，存储介质按访问速度（受限于介质和寻址方式）可以依次分为：
 
-CPU�ڲ��Ĵ��� --> CPU�ڲ����棨�༶�� --> ���ڴ� --> �����ⲿ�洢�����̡�flash�����̵ȣ�
+CPU内部寄存器 --> CPU内部缓存（多级） --> 主内存 --> 辅助外部存储（磁盘、flash、软盘等）
 
-�ڴ��ǰ��ֽڴ洢���ݵģ�CPUֱ�ӽ�Ҫ���ʵ��ڴ��ַ�͵���ַ�����ϼ��ɣ��������Ĺ�����
+内存是按字节存储数据的，CPU直接将要访问的内存地址送到地址总线上即可，无需额外的管理。
 
-���ⲿ�洢�Ͳ�һ���ˣ����һ����������ļ���Ҳ������������;������Linux swap����������ͬ�Ĳ���ϵͳ֧�ֵ��ļ����Ͳ�һ����
-���Ҳ�ͬ���ļ���СҲ��һ����ÿ������������ϵ��ļ�����Ҫ��Ǹ��ļ������͡���С�����λ�õȵ��ļ���Ϣ���������������Ե����ݣ�Ԫ���ݣ�����ЩԪ����ͬ��Ҫ����������ϡ�
+但外部存储就不一样了，外存一般用来存放文件（也可用作其它用途，例如Linux swap分区）。不同的操作系统支持的文件类型不一样，
+而且不同的文件大小也不一样，每个保存在外存上的文件必须要标记该文件的类型、大小、存放位置等等文件信息（即描述数据属性的数据，元数据）。这些元数据同样要保存在外存上。
 
-��ˣ���ν��ļ����뻮һ�ı��浽����豸�ϣ��ǲ���ϵͳ����Ҫ��������⡣���������Ĵ𰸾��ǡ����ļ�ϵͳ��
+因此，如何将文件整齐划一的保存到外存设备上，是操作系统必须要解决的问题。而这个问题的答案就是——文件系统。
 
-## �ļ�ϵͳ�Ĺ���
+## 文件系统的功能
 
-���û��򿪼����������ϵͳ���ڵ�½shell�л��Զ����뵽����Ŀ¼��/home/xxx/���¡��û����Կ����Ӹ�Ŀ¼��/����ʼ���ļ�Ŀ¼�������Խ��뵽�κ�һ��Ŀ¼���򿪡��޸Ļ�ɾ���ļ���
+当用户打开计算机，进入系统后，在登陆shell中会自动进入到个人目录（/home/xxx/）下。用户可以看到从根目录（/）开始的文件目录树，可以进入到任何一个目录，打开、修改或删除文件。
 
-����ļ�ϵͳ�ĵ�һ�����ܾ��ǣ������ļ�ϵͳ���ļ��ķ��ʲ�����
+因此文件系统的第一个功能就是，负责文件系统中文件的访问操作。
 
-���⣬���ָ��û����ļ�Ŀ¼��Ϣ�������ں�����ʱ���ⲿ�洢�豸�ж�ȡ�����ġ�������Ҫ���Ƚ��ļ�ϵͳ����װ�����������豸�ϣ���Linux��ʹ��mkfs.xxx���ߣ���windows�н�������ʽ������
+此外，呈现给用户的文件目录信息，都是内核启动时从外部存储设备中读取出来的。而这需要首先将文件系统“安装”到这个外存设备上，在Linux中使用mkfs.xxx工具；在windows中叫做“格式化”。
 
-�ڰ�װLinuxϵͳʱ����Ҫ�Դ��̽��з��������ұ���ҪΪ��/����Ŀ¼���������������������֮�󣬾Ϳ��Խ��������Ѱ�װ���ļ�ϵͳ���豸mount����Ŀ¼�ṹ�е�ĳ��·����������mount point������
+在安装Linux系统时，需要对磁盘进行分区，而且必须要为“/”根目录建立分区。建立起根分区之后，就可以将其它的已安装有文件系统的设备mount到根目录结构中的某个路径（称作“mount point”）。
 
-����˵���ٶ���Ϊ�ҵ��������ubuntu 10.04����������һ��Ӳ�̣���һ������ΪӲ�̷�������������������
+比如说，假定我为我的虚拟机（ubuntu 10.04）新添加了一块硬盘，第一步就是为硬盘分区（建立分区表）：
 
 ```sh
 bookxiaow@ubuntu1004:~$ sudo fdisk -l /dev/sdb
@@ -106,7 +106,7 @@ Command (m for help): w
 The partition table has been altered!
 ```
 
-���������Ѿ������÷������ˣ�����ֻ����һ����/dev/sdb1�����������ǰ�װext4�ļ�ϵͳ��
+现在我们已经建立好分区表了，并且只分了一个区/dev/sdb1，接下来就是安装ext4文件系统了
 
 ```sh
 bookxiaow@ubuntu1004:~$ sudo mkfs.ext4 -c /dev/sdb1
@@ -135,7 +135,7 @@ This filesystem will be automatically checked every 30 mounts or
 180 days, whichever comes first.  Use tune2fs -c or -i to override.
 ```
 
-��󣬾Ϳ��Թ��ص���Ŀ¼����
+最后，就可以挂载到根目录下了
 
 ```sh
 bookxiaow@ubuntu1004:~$ sudo mkdir /mnt/test
@@ -145,23 +145,23 @@ bookxiaow@ubuntu1004:/mnt/test$ ls
 lost+found
 ```
 
-���Ŀ¼/mnt/test�Ѿ������ˣ����������Ѿ��������ļ�����ô����֮��ԭ�����ļ����ݾͱ������ء������ˣ���unmount֮����ٱ�¶���������С�����ǲ��ǿ��������ض����أ�A_A
+如果目录/mnt/test已经存在了，并且里面已经了有了文件，那么挂载之后原来的文件内容就被“隐藏”起来了，在unmount之后会再暴露出来！这个小功能是不是可以用来藏东西呢，A_A
 
-# Linux�ļ�ϵͳ�Ľṹ
+# Linux文件系统的结构
 
-Linux�У����û�ֱ�ӽ�������VFS��Virtual Filesystem���������û��ṩ��ͳһ���ļ������ӿڣ�open/create/close/write/read/...��������ĳЩ������ĳЩ�ļ�ϵͳ�и�����֧�֡�
+Linux中，跟用户直接交互的是VFS（Virtual Filesystem）。它向用户提供了统一的文件操作接口（open/create/close/write/read/...），尽管某些操作在某些文件系统中根本不支持。
 
-[VFS����ṹ]��/image/VFS.jpg��
+![VFS整体结构]（/image/VFS.jpg）
 
-�������ͼ�У�һ�������ļ��ض�λ��ĳ����װ���ض��ļ�ϵͳ�������飩�ķ����У����Ҷ�Ӧһ�� inode �ṹ������һ��inode���ܻ��Ӧ���Ŀ¼��dentry������˵Ӳ���ӣ�ע�ⲻ��cp����
-��һ��Ŀ¼���ͬ�Ľ��̿��ܻ�ͬʱ���������Ҳ�Ͳ����˶��`struct file`�ṹ��������ͬ�Ľ��̾Ϳ��������Լ��Ĵ򿪷�ʽ�Ͷ�дƫ��������ĳЩ����£�Ҳ����ͬ�����̻�ͬ������
-�Ķ��fdָ��ͬһ��`struct file`�ṹ������˵`dup()/dup2()`��`fork()`֮���ӽ��̡�
+在上面的图中，一个磁盘文件必定位于某个安装有特定文件系统（超级块）的分区中，而且对应一个 inode 结构；但是一个inode可能会对应多个目录项dentry，比如说硬链接（注意不是cp）。
+对一个目录项，不同的进程可能会同时打开它，因此也就产生了多个`struct file`结构，这样不同的进程就可以设置自己的打开方式和读写偏移量。在某些情况下，也会有同个进程或不同进程内
+的多个fd指向同一个`struct file`结构，比如说`dup()/dup2()`或`fork()`之后父子进程。
 
-##�����е��ļ���ʾ
+##进程中的文件表示
 
-�Խ��̶��ԣ�һ���򿪵��ļ���Ӧ��һ��������Ψһ������fd�����fd��Ȼ��ĳ�����������ֵ��
+对进程而言，一个打开的文件对应于一个进程内唯一的整数fd。这个fd必然是某个数组的索引值。
 
-��һ��`struct task_struct`�����ݣ�
+看一下`struct task_struct`的内容：
 
 ```c
 struct task_struct {
@@ -170,7 +170,7 @@ struct task_struct {
 };
 ```
 
-������`struct files_struct`�Ķ��壺
+继续看`struct files_struct`的定义：
 
 ```c
 struct files_struct {
@@ -184,9 +184,9 @@ struct files_struct {
 };
 ```
 
-�����и� fd_array���飬��Ԫ������ָ��`struct file`��ָ�롣��ˣ����Բ²���̻���fd������ȥ������������`struct file`���������Сֻ��32�������ܽ���ֻ�ܴ�32���ļ��ɣ�
+这里有个 fd_array数组，其元素正是指向`struct file`的指针。因此，可以猜测进程会用fd作索引去这个数组里查找`struct file`。但数组大小只有32，不可能进程只能打开32个文件吧？
 
-��ô��ʵ�����ʲô�����أ������Ǹ�һ��writeϵͳ���õ�ʵ�ֿ���������ô��fd�ҵ�fileָ��İɡ�
+那么真实情况是什么样的呢？让我们跟一下write系统调用的实现看看它是怎么从fd找到file指针的吧。
 
 ```c
 asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
@@ -196,59 +196,59 @@ asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
 }
 ```
 
-Ҫ����`fget_light`�Ĵ��룬Ҫ������[RCUԭ��](http://blog.chinaunix.net/uid-12260983-id-2952617.html)����Ϊ�ں�ʹ��RCU������`files_struct`�ĸ��¡�
+要看懂`fget_light`的代码，要先理解[RCU原理](http://blog.chinaunix.net/uid-12260983-id-2952617.html)，因为内核使用RCU来保护`files_struct`的更新。
 
-���ٴ���Ľ���ܲ��죬`struct file*`���鲢����`fd_array`������`fdt->fd`������`fd_array`��ɶ�ã���ʱ���������
+跟踪代码的结果很诧异，`struct file*`数组并不是`fd_array`，而是`fdt->fd`。至于`fd_array`有啥用，暂时还不清楚。
 
-## �򿪵��ļ�����`struct file`
+## 打开的文件——`struct file`
 
-һ���򿪵��ļ������ں��ж�Ӧһ��`struct file`�ṹ�壬����[slab������](http://www.ibm.com/developerworks/cn/linux/l-linux-slab-allocator/)��������������չ�����
+一个打开的文件，在内核中对应一个`struct file`结构体，采用[slab分配器](http://www.ibm.com/developerworks/cn/linux/l-linux-slab-allocator/)来管理创建与回收工作。
 
-�ļ������Կɷ�Ϊ��̬���ԺͶ�̬���ԡ���̬�������ļ��Ĺ������ԣ������ļ�·�����ļ������ߡ��ļ����͵ȵȣ�����̬�������ڴ��ļ�ʱ�������壬�����ļ���ģʽ��ֻ��/ֻд/��д�����ļ���ǰƫ�ơ�
+文件的属性可分为静态属性和动态属性。静态属性是文件的固有属性，比如文件路径、文件所有者、文件类型等等；而动态属性则在打开文件时才有意义，比如文件打开模式（只读/只写/读写）和文件当前偏移。
 
-�ļ�·��������Ŀ¼��dentry���dentry�ֱ�����ָ���ļ�Ԫ���ݵ�inodeָ�룬���file�ṹֻ��Ҫ����ָ��dentry�ṹ��ָ�뼴�ɣ�`struct dentry *f_dentry����
+文件路径保存在目录项dentry里，而dentry又保存有指向文件元数据的inode指针，因此file结构只需要保存指向dentry结构的指针即可（`struct dentry *f_dentry）。
 
-ͬʱ��file�ṹ��ά���ļ��Ķ�̬���ԣ�
+同时，file结构又维护文件的动态属性：
 
 ```c
 struct file {
-	struct file_operation *f_op; /*һ���ļ���������ָ��*/
-	atomic_t f_count; /*���ṹ���ü���*/
-	unsigned_int f_flags; /* �ļ��򿪷�ʽ */
-	mode_t f_mode; /* �ļ��Ƿ�ɶ����д*/
-	loff_t f_pos; /*��ǰƫ����*/
+	struct file_operation *f_op; /*一组文件操作函数指针*/
+	atomic_t f_count; /*本结构引用计数*/
+	unsigned_int f_flags; /* 文件打开方式 */
+	mode_t f_mode; /* 文件是否可读或可写*/
+	loff_t f_pos; /*当前偏移量*/
 };
 ```
 
-�û��ռ���ļ���read/write�������ն��ǵ���`f_op`��ĺ�������fd��file�ṹֻ��Ҫ����һ��ת����������������ײ��ļ�ϵͳûʲô��ϵ����ʵ�ؼ��������`f_op`�ˡ�
+用户空间对文件的read/write操作最终都是调用`f_op`里的函数。从fd到file结构只需要经过一次转换，看起来好像跟底层文件系统没什么关系，其实关键就是这个`f_op`了。
 
-��ͬ�ĵײ��ļ�ϵͳ���ڴ����ļ���file�ṹ��ʱ��������`f_op`Ϊָ���ض���`struct file_operation`��ָ�롣
+不同的底层文件系统，在创建文件（file结构）时，会设置`f_op`为指向特定的`struct file_operation`的指针。
 
-## ���ļ�����inode����������Ŀ¼��dentry
+## 从文件名到inode的桥梁——目录项dentry
 
-�����ᵽ��`struct file`��ֻ������ָ��`struct dentry`��ָ�룬��˶��ڴ򿪵��ļ���`struct dentry`��Ҫ����ָ��`struct inode`��ָ�롣
+上面提到，`struct file`中只保存有指向`struct dentry`的指针，因此对于打开的文件，`struct dentry`需要保存指向`struct inode`的指针。
 
-��һ���棬��openʱ���ں���Ҫ�����ļ���pathname���ҵ����ļ���Ӧ��inode���ܻ�ȡ���ļ����ݡ�������½��ļ���Ҳ��Ҫ�ҵ����ļ�����Ŀ¼��inode�����ܴ������ļ���
+另一方面，在open时，内核需要根据文件名pathname来找到该文件对应的inode才能获取到文件数据。如果是新建文件，也需要找到该文件所在目录的inode，才能创建新文件。
 
-��ˣ���δ�pathname��λ��inode��Ҳ��Ҫ����`struct dentry`��
+因此，如何从pathname定位到inode，也需要借助`struct dentry`。
 
-�й��ļ�·���������ľ���ʵ�֣����Բο�������ϣ�����ֻ������һ�´��¹��̣�
+有关文件路径名解析的具体实现，可以参靠相关资料，这里只是描述一下大致过程：
 
-1. ���ȿ��ļ�·�����Ǿ���·����/path/to/file���������·����filename������������ǴӸ�Ŀ¼���Ǵӵ�ǰĿ¼��ʼ����
-2. ��ǰ���̵ĸ�Ŀ¼�͵�ǰĿ¼��Ϣ��������`struct tast_struct`��`struct fs_struct *fs`����
+1. 首先看文件路径名是绝对路径（/path/to/file）还是相对路径（filename），这决定了是从根目录还是从当前目录开始搜索
+2. 当前进程的根目录和当前目录信息都保存在`struct tast_struct`的`struct fs_struct *fs`里面
 
 ```c
 struct fs_struct {
-	atomic_t count; // ���ü���
-	rwlock_t lock; //������
+	atomic_t count; // 引用计数
+	rwlock_t lock; //锁保护
 	int umask;
 	struct dentry *root, *pwd, *altroot;
 	struct vfsmount *rootmnt, *pwdmnt, *altrootmnt;
 };
 ```
 
-3. dentry�ṹ����һ���汣�����Լ����ļ�����Ŀ¼�����ƣ�`d_iname`���������Ŀ¼�Ļ��ֱ�����ָ��Ŀ¼�������ļ�����Ŀ¼����dentry��ָ�루`d_child`���������Ӹ�Ŀ¼����ǰĿ¼����ʼ���ȶԣ�
-�����ҵ��ļ���dentry�ṹ�ˡ�
+3. dentry结构里面一方面保存了自己的文件（或目录）名称（`d_iname`），如果是目录的话又保存了指向本目录下所有文件（子目录）的dentry的指针（`d_child`）。这样从根目录（或当前目录）开始逐层比对，
+即可找到文件的dentry结构了。
 
-## �����ļ����ݵ����ݡ���inode
+## 描述文件数据的数据——inode
 
