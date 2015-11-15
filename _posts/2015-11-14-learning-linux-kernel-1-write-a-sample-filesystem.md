@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Linux内核学习笔记（1）文件系统
+title: Linux内核之文件系统学习笔记（1）认识文件系统
 categories: Linux_kernel
 tags: Linux kernel filesystem
 ---
@@ -153,5 +153,102 @@ Linux中，跟用户直接交互的是VFS（Virtual Filesystem）。它向用户提供了统一的文件操
 
 [VFS整体结构]（/image/VFS.jpg）
 
+在上面的图中，一个磁盘文件必定位于某个安装有特定文件系统（超级块）的分区中，而且对应一个 inode 结构；但是一个inode可能会对应多个目录项dentry，比如说硬链接（注意不是cp）。
+对一个目录项，不同的进程可能会同时打开它，因此也就产生了多个`struct file`结构，这样不同的进程就可以设置自己的打开方式和读写偏移量。在某些情况下，也会有同个进程或不同进程内
+的多个fd指向同一个`struct file`结构，比如说`dup()/dup2()`或`fork()`之后父子进程。
 
+##进程中的文件表示
+
+对进程而言，一个打开的文件对应于一个进程内唯一的整数fd。这个fd必然是某个数组的索引值。
+
+看一下`struct task_struct`的内容：
+
+```c
+struct task_struct {
+	/* open file information */
+	struct files_struct *files;
+};
+```
+
+继续看`struct files_struct`的定义：
+
+```c
+struct files_struct {
+	atomic_t count;
+	struct fdtable *fdt;
+	struct fdtable fdtab;
+	fd_set close_on_exec_init;
+	fd_set open_fds_init;
+	struct file * fd_array[NR_OPEN_DEFAULT]; /*on i386, NR_OPEN_DEFAULT is 32*/
+	spinlock_t file_lock; 
+};
+```
+
+这里有个 fd_array数组，其元素正是指向`struct file`的指针。因此，可以猜测进程会用fd作索引去这个数组里查找`struct file`。但数组大小只有32，不可能进程只能打开32个文件吧？
+
+那么真实情况是什么样的呢？让我们跟一下write系统调用的实现看看它是怎么从fd找到file指针的吧。
+
+```c
+asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
+{
+	int fput_needed;
+	file = fget_light(fd, &fput_needed);
+}
+```
+
+要看懂`fget_light`的代码，要先理解[RCU原理](http://blog.chinaunix.net/uid-12260983-id-2952617.html)，因为内核使用RCU来保护`files_struct`的更新。
+
+跟踪代码的结果很诧异，`struct file*`数组并不是`fd_array`，而是`fdt->fd`。至于`fd_array`有啥用，暂时还不清楚。
+
+## 打开的文件——`struct file`
+
+一个打开的文件，在内核中对应一个`struct file`结构体，采用[slab分配器](http://www.ibm.com/developerworks/cn/linux/l-linux-slab-allocator/)来管理创建与回收工作。
+
+文件的属性可分为静态属性和动态属性。静态属性是文件的固有属性，比如文件路径、文件所有者、文件类型等等；而动态属性则在打开文件时才有意义，比如文件打开模式（只读/只写/读写）和文件当前偏移。
+
+文件路径保存在目录项dentry里，而dentry又保存有指向文件元数据的inode指针，因此file结构只需要保存指向dentry结构的指针即可（`struct dentry *f_dentry）。
+
+同时，file结构又维护文件的动态属性：
+
+```c
+struct file {
+	struct file_operation *f_op; /*一组文件操作函数指针*/
+	atomic_t f_count; /*本结构引用计数*/
+	unsigned_int f_flags; /* 文件打开方式 */
+	mode_t f_mode; /* 文件是否可读或可写*/
+	loff_t f_pos; /*当前偏移量*/
+};
+```
+
+用户空间对文件的read/write操作最终都是调用`f_op`里的函数。从fd到file结构只需要经过一次转换，看起来好像跟底层文件系统没什么关系，其实关键就是这个`f_op`了。
+
+不同的底层文件系统，在创建文件（file结构）时，会设置`f_op`为指向特定的`struct file_operation`的指针。
+
+## 从文件名到inode的桥梁——目录项dentry
+
+上面提到，`struct file`中只保存有指向`struct dentry`的指针，因此对于打开的文件，`struct dentry`需要保存指向`struct inode`的指针。
+
+另一方面，在open时，内核需要根据文件名pathname来找到该文件对应的inode才能获取到文件数据。如果是新建文件，也需要找到该文件所在目录的inode，才能创建新文件。
+
+因此，如何从pathname定位到inode，也需要借助`struct dentry`。
+
+有关文件路径名解析的具体实现，可以参靠相关资料，这里只是描述一下大致过程：
+
+1. 首先看文件路径名是绝对路径（/path/to/file）还是相对路径（filename），这决定了是从根目录还是从当前目录开始搜索
+2. 当前进程的根目录和当前目录信息都保存在`struct tast_struct`的`struct fs_struct *fs`里面
+
+```c
+struct fs_struct {
+	atomic_t count; // 引用计数
+	rwlock_t lock; //锁保护
+	int umask;
+	struct dentry *root, *pwd, *altroot;
+	struct vfsmount *rootmnt, *pwdmnt, *altrootmnt;
+};
+```
+
+3. dentry结构里面一方面保存了自己的文件（或目录）名称（`d_iname`），如果是目录的话又保存了指向本目录下所有文件（子目录）的dentry的指针（`d_child`）。这样从根目录（或当前目录）开始逐层比对，
+即可找到文件的dentry结构了。
+
+## 描述文件数据的数据——inode
 
