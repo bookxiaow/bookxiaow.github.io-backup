@@ -151,7 +151,7 @@ lost+found
 
 Linux中，跟用户直接交互的是VFS（Virtual Filesystem）。它向用户提供了统一的文件操作接口（open/create/close/write/read/...），尽管某些操作在某些文件系统中根本不支持。
 
-![VFS整体结构]（/image/VFS.jpg）
+![VFS整体结构]（../image/VFS.jpg）
 
 在上面的图中，一个磁盘文件必定位于某个安装有特定文件系统（超级块）的分区中，而且对应一个 inode 结构；但是一个inode可能会对应多个目录项dentry，比如说硬链接（注意不是cp）。
 对一个目录项，不同的进程可能会同时打开它，因此也就产生了多个`struct file`结构，这样不同的进程就可以设置自己的打开方式和读写偏移量。在某些情况下，也会有同个进程或不同进程内
