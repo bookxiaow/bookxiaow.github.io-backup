@@ -208,7 +208,7 @@ asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
 
 文件的属性可分为静态属性和动态属性。静态属性是文件的固有属性，比如文件路径、文件所有者、文件类型等等；而动态属性则在打开文件时才有意义，比如文件打开模式（只读/只写/读写）和文件当前偏移。
 
-文件路径保存在目录项dentry里，而dentry又保存有指向文件元数据的inode指针，因此file结构只需要保存指向dentry结构的指针即可（`struct dentry *f_dentry）。
+在上面的图中可以看到，同个文件可能会有对应多个文件路径，因此从上往下看，file的下一层并不是inode，而是文件目录项dentry，因此需要保存指向dentry结构的指针（`struct dentry *f_dentry）。
 
 同时，file结构又维护文件的动态属性：
 
@@ -234,23 +234,7 @@ struct file {
 
 因此，如何从pathname定位到inode，也需要借助`struct dentry`。
 
-有关文件路径名解析的具体实现，可以参靠相关资料，这里只是描述一下大致过程：
-
-1. 首先看文件路径名是绝对路径（/path/to/file）还是相对路径（filename），这决定了是从根目录还是从当前目录开始搜索
-2. 当前进程的根目录和当前目录信息都保存在`struct tast_struct`的`struct fs_struct *fs`里面
-
-	```c
-	struct fs_struct {
-		atomic_t count; // 引用计数
-		rwlock_t lock; //锁保护
-		int umask;
-		struct dentry *root, *pwd, *altroot;
-		struct vfsmount *rootmnt, *pwdmnt, *altrootmnt;
-	};
-	```
-
-3. dentry结构里面一方面保存了自己的文件（或目录）名称（`d_iname`），如果是目录的话又保存了指向本目录下所有文件（子目录）的dentry的指针（`d_child`）。这样从根目录（或当前目录）开始逐层比对，
-即可找到文件的dentry结构了。
+关于文件路径的解析，在下一篇文章中学习。
 
 ## 描述文件数据的数据——inode
 
@@ -323,19 +307,188 @@ struct inode_operations {
 ```c
 extern struct list_head super_blocks;
 extern spinlock_t sb_lock; // protect the list
+
+struct super_block {
+	struct list_head s_list; // 链接到链表
+};
 ```
 
-思考一下，我们在mount一个分区到系统后，对该分区的操作就是新建文件/目录 -> 读文件 -> 写文件 -> 删除文件/目录。
+super block首先保存了描述块设备分区的信息，例如块大小、最大允许文件大小、是否包含脏数据等。
 
-执行这些操作需要哪些信息呢？
+```c
+struct super_block {
+	dev_t				s_dev; //块设备号
+	unsigned long       s_blocksize;//块block大小
+	unsigned char       s_blocksize_bits;
+	unsigned char       s_dirt;//内存中的超级块信息同磁盘超级块信息是否一致，即是否需要同步
+	unsigned long long  s_maxbytes; /* Max file size */
+	unsigned long       s_flags;
+	unsigned long       s_magic;
+	struct dentry       *s_root;//该分区根目录dentry
 
-- 首先，新建文件要确保当前分区是否有足够空闲的block，也就是超级块需要维护当前分配的块信息
-	
-	```c
-	struct super_block {
-		unsigned long       s_blocksize;
-		unsigned char       s_blocksize_bits;
-		unsigned long long  s_maxbytes; /* Max file size */
+	struct block_device *s_bdev;
+	void				*s_fs_info; /* Filesystem private info */
+};
+```
 
-	```
+super block在执行mount操作时创建，同时也会将挂载点的dentry与该super block关联起来，这样用户才能通过系统的根目录树来操作这个分区。
 
+此外，super block还维护了当前分区下所有的文件的链表、所有被修改了的文件的链表以及所有等待写会磁盘的文件的链表。
+
+```c
+struct super_block {
+	struct list_head    s_inodes;   /* all inodes */
+	struct list_head    s_dirty;    /* dirty inodes */
+	struct list_head    s_io;       /* parked for writeback */
+	struct hlist_head   s_anon;     /* anonymous dentries for (nfs) exporting */
+	struct list_head    s_files;
+};
+```
+
+总之，无论是file结构，inode结构还是super_block结构，这些都是VFS抽象出来的、用于统一描述各文件系统的接口，最终的信息仍然需要从底层文件系统获取。
+
+C语言中总能通过函数指针来达到面向对象的效果，因此在Linux 文件系统架构中，总能发现下层对象负责创建上层对象的同时，会设置好一组接口函数。
+
+另一方面，不同的文件系统可能需要维护额外的信息，这些信息格式不一，需要在层与层间交换时会很不方便。C语言可以通过`void *`来解决这个问题。
+
+例如，在`struct super_block`中有个指针`s_fs_info`就是保存了文件系统私有数据，其意义由各文件系统自己解析。
+
+此外，对于磁盘文件系统，写操作总是先写到内存，再同步回磁盘，因此内存和磁盘之间的同步机制也是磁盘文件系统需要着重考虑的东西。
+
+
+## 文件系统类型 file_system_type
+
+在一开始我们执行mount时，总是需要指定文件系统类型（例如ext4）。这个文件系统类型必须是内核能识别的。
+
+什么样的文件系统是内核能识别的呢？换言之，如果我自己定义一种新的文件系统，怎么样能让内核识别呢？
+
+答案就是，你要先把它注册到内核中去。
+
+注册的对象是`struct file_system_type`,注册的方法是`int register_filesystem(struct file_system_type * fs)`。
+
+```c
+struct file_system_type {
+    const char *name; //名称，例如 "ext4"
+    int fs_flags; // 标记
+    int (*get_sb) (struct file_system_type *, int, 
+               const char *, void *, struct vfsmount *); // 读取一个超级块
+    void (*kill_sb) (struct super_block *); // 删除一个超级块
+    struct module *owner;
+    struct file_system_type * next; //指向下一个file_system_type
+    struct list_head fs_supers; // 所有本类型的super_block组成的链表，这里是链表头
+    struct lock_class_key s_lock_key;
+    struct lock_class_key s_umount_key;
+};
+```
+
+系统内所有注册成功的file_system_type组成一条单链表，链表头是全局变量`file_systems`。调用`register_filesystem`其实就是将其append到链表尾部。
+当然前提是它之前没有被注册过（按name来查找）。
+
+在注册了文件系统类型之后，再执行mount操作，内核就通过`get_sb`函数指针调用该文件系统特定的函数就知道如何创建属于该文件系统类型的super_block。
+
+# 挂载文件系统
+
+## 根目录
+
+根目录下有什么文件？答案很简单，只要ls或tree查看一下即可
+
+```sh
+bookxiao@ubuntu-kernel:~/src/linux-2.6.20$ tree -d -L 1
+.
+├── arch
+├── block
+├── crypto
+├── Documentation
+├── drivers
+├── fs
+├── include
+├── init
+├── ipc
+├── kernel
+├── lib
+├── mm
+├── net
+├── scripts
+├── security
+├── sound
+└── usr
+```
+
+但并不是说每个进程的根目录都是系统根目录（system's root filesystem）。进程的根目录信息保存在它的namespace中，且子进程或线程会继承父进程的namespace。
+
+```c
+struct task_struct {
+	/* namespaces */
+    struct nsproxy *nsproxy;
+};
+
+struct nsproxy {
+    atomic_t count;
+    spinlock_t nslock;
+    struct uts_namespace *uts_ns;
+    struct ipc_namespace *ipc_ns;
+    struct mnt_namespace *mnt_ns;
+    struct pid_namespace *pid_ns;
+};
+
+struct mnt_namespace {
+    atomic_t        count;
+    struct vfsmount *   root; // 根文件系统
+    struct list_head    list; //所有挂载在本namespace下的文件系统
+    wait_queue_head_t poll;
+    int event;
+};
+```
+
+一个namespace有一个根文件系统，且所有挂载在该根文件系统下的其它所有文件系统组成一张双向循环链表。
+
+在系统初始化时内核为init进程创建了namespace与根文件系统，而默认下的fork操作（不带CLONE_NEWNS参数的clone）不会创建新的namespace。
+所以所有用户进程的默认namespace和根文件系统与init进程一致，其根文件系统都是系统根文件系统。
+
+## 挂载操作 vfsmount
+
+每个文件系统都拥有一个自己的文件目录树，根文件系统作为一个特殊的文件系统，它的目录树被用来作为总的目录树，其它文件系统的目录树都需要挂载到
+它的某个子目录上（挂载点）。
+
+将文件系统自己的目录树和挂载点区分开来很关键。比如说，我将一个分区挂载到`/mnt/test/`下，然后在该目录下创建一个文件file.txt，那么我们可以通过`/mnt/test/file.txt`来定位该文件。
+然后我们将其卸载，再将它挂载到`/mnt/test2/`下，这时候我们可以通过`/mnt/test2/file.txt`来定位该文件。
+
+Linux允许我们同时将一个分区挂载到多个不同的挂载点上，这样通过不同的文件路径我们都可以访问该分区下的文件。但一个分区在内核中只对应一个super_block，那如何表示不同的挂载点呢？
+
+Linux为每一次挂载操作定义一个**vfsmount**来表示。
+
+```c
+struct vfsmount {
+    struct list_head mnt_hash;
+    struct vfsmount *mnt_parent;    /* fs we are mounted on */
+    struct dentry *mnt_mountpoint;  /* dentry of mountpoint */
+    struct dentry *mnt_root;    /* root of the mounted tree */
+    struct super_block *mnt_sb; /* pointer to superblock */
+    struct list_head mnt_mounts;    /* list of children, anchored here */
+    struct list_head mnt_child; /* and going through their mnt_child */
+    atomic_t mnt_count;
+    int mnt_flags;
+    int mnt_expiry_mark;        /* true if marked for expiry */
+    char *mnt_devname;      /* Name of device e.g. /dev/dsk/hda1 */
+    struct list_head mnt_list;
+    struct list_head mnt_expire;    /* link in fs-specific expiry list */
+    struct list_head mnt_share; /* circular list of shared mounts */
+    struct list_head mnt_slave_list;/* list of slave mounts */
+    struct list_head mnt_slave; /* slave list entry */
+    struct vfsmount *mnt_master;    /* slave is on master->mnt_slave_list */
+    struct mnt_namespace *mnt_ns;   /* containing namespace */
+    int mnt_pinned;
+};
+```
+
+挂载的文件系统只有在第一次挂载时才会新建`super_block`结构，其中`s_root`指向的是挂载点的dentry。随后的挂载操作并不会创建新的super block。
+
+# 总结
+
+在研究Linux 内核文件系统的实现细节之前，先弄懂各个结构体的作用，因此本文仅介绍几本概念，忽略了很多实现上的细节，这些内容将在后续的学习中继续分析。
+
+# 参考资料
+
+1. Understanding the Linux Kernel, 3rd, Daniel P. Bovet / Marco Cesati
+2. [解析 Linux 中的 VFS 文件系统机制](https://www.ibm.com/developerworks/cn/linux/l-vfs/)
+3. Linux Source Code(linux-2.6.20) & Linux Doc
