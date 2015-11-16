@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Linux内核之文件系统学习笔记（1）认识文件系统
+title: Linux内核学习之文件系统（1）认识文件系统
 categories: Linux_kernel
 tags: Linux kernel filesystem
 ---
