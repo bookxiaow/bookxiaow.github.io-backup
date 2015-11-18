@@ -1,7 +1,7 @@
 ---
 layout: post
-title: Linux内核学习之文件系统（1）认识文件系统
-categories: Linux_kernel
+title: Linux内核学习之文件系统(一) 认识文件系统
+categories: linux_kernel
 tags: Linux kernel filesystem
 ---
 
@@ -233,6 +233,40 @@ struct file {
 另一方面，在open时，内核需要根据文件名pathname来找到该文件对应的inode才能获取到文件数据。如果是新建文件，也需要找到该文件所在目录的inode，才能创建新文件。
 
 因此，如何从pathname定位到inode，也需要借助`struct dentry`。
+
+```c
+struct dentry {
+	atomic d_count; //引用计数，当大于0时，此dentry不会被释放
+	unsigned int d_flags;
+    spinlock_t d_lock;      /* per dentry lock */
+    struct inode *d_inode;      /* Where the name belongs to - NULL is
+                     * negative */
+    /*  
+     * The next three fields are touched by __d_lookup.  Place them here
+     * so they all fit in a cache line.
+     */
+    struct hlist_node d_hash;   /* lookup hash list */
+    struct dentry *d_parent;    /* parent directory */
+    struct qstr d_name;
+
+    struct list_head d_lru;     /* LRU list */
+    /*  
+     * d_child and d_rcu can share memory
+     */
+    union {
+        struct list_head d_child;   /* child of parent list */
+        struct rcu_head d_rcu;
+    } d_u;
+    struct list_head d_subdirs; /* our children */
+    struct list_head d_alias;   /* inode alias list */
+    unsigned long d_time;       /* used by d_revalidate */
+    struct dentry_operations *d_op;
+    struct super_block *d_sb;   /* The root of the dentry tree */
+    void *d_fsdata;         /* fs-specific data */
+    int d_mounted; //挂载在本目录上的文件系统计数
+    unsigned char d_iname[DNAME_INLINE_LEN_MIN];    /* small names */
+};
+```
 
 关于文件路径的解析，在下一篇文章中学习。
 
