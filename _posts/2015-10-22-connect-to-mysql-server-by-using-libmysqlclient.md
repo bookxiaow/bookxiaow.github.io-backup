@@ -25,7 +25,7 @@ MySQL实现了三种Connector用于C/C++ 客户端程序来访问MySQL服务器�
 
 在安装好Connector之后，我们就可以在程序中使用这些API来连接到MySQL数据库了。本文主要介绍的是使用libmysqlclient库来访问MYSQL数据库。
 
-###1 主要数据结构
+## 1 主要数据结构
 
 **MYSQL**
 
@@ -47,45 +47,45 @@ mysql数据库连接句柄。在执行任何数据库操作之前首先就需要
 
 field在row中的索引值，从0开始。
 
-###2 主要API
+## 2 主要API
 
 **mysql\_init**
 
-	{% highlight c %}
+```c
 	MYSQL *mysql_init(MYSQL *mysql)
-	{% endhighlight %}
+```
 
 创建一个MYSQL对象。
 	
 **mysql\_real\_connect**
 
-	{% highlight c %}
+```c
 	MYSQL *mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long client_flag);
-	{% endhighlight %}
+```
 
 连接到数据库服务器。
 	 
 **mysql\_real\_query**
 
-	{% highlight c %}
+```c
 	int mysql_real_query(MYSQL *mysql, const char *stmt_str, unsigned long length);
-	{% endhighlight %}
+```
 
 执行MySQL语句`stmt_str`，成功返回0
 
 **mysql\_store\_result**
 
-	{% highlight c %}
+```c
 	MYSQL_RES *mysql_store_result(MYSQL *mysql);
-	{% endhighlight %}
+```
 
 在执行完查询语句（`mysql_store_result`or `mysql_use_result`）后，调用此函数获得执行结果（result set）。如果执行正确且有结果返回，那么此函数返回非NULL的指针。
 		
 **mysql\_affected\_rows**
 
-	{% highlight c %}
+```c
 	my_ulonglong mysql_affected_rows(MYSQL *mysql);
-	{% endhighlight %}
+```
 
 如果执行的是UPDATE、INSERT和DELETE操作，那么MySQL会告诉你此操作影响了多少行（Rows）。调用此函数即能返回该值。
 
@@ -140,7 +140,7 @@ else // query succeeded, process any data returned by it
 }
 {% endhighlight %}
 
-### 3 解析返回结果
+## 3 解析返回结果
 
 在上一节，假定我们成功地执行了语句，并获得了结果（`MYSQL_RES`结构）。那么怎么从`MYSQL_RES`中解析出我们想要的东西呢？
 
@@ -325,3 +325,44 @@ mysql> select * from table1;
 "./test: /usr/lib/x86_64-linux-gnu/libmysqlclient.so.18: no version information available (required by ./test)"
 
 猜测可能是因为Connector库版本和mysql server版本不一致导致，但貌似不影响程序的执行，暂不管他了。
+
+## 4 使用超时机制
+
+libmysqlclient支持设置超时执行connect或者query操作。
+
+这对于想定期检查mysql server状态的进程/线程很有用处。
+
+当然，如果是client直连mysql server，完全可以使用`mysql_ping`来检测server状态。但在我的项目中，client连的是公司搭建的一套mysql集群。通过`mysql_ping`无法真实地检测到底层mysql server的状态，只能通过执行简单的sql 查询才能知道server到底正不正常。
+
+我们的做法是，专门起一个线程，定期执行简单的sql查询。如果服务器正常，那么能够立即返回；但是如果server出现问题了，那么检测线程就会无止境地阻塞在那里，直到server恢复正常。如果是这样的话，我的检测线程就无法把结果反馈给主线程，以便即使切换server。
+
+好在，libmysqlclient提供了一个接口，用以开启超时机制。
+
+```c
+MYSQL mysql;
+mysql_init(&mysql);
+
+int r_timeout = 10; // read timeout
+int c_timeout = 10; // connect timeout
+ret = mysql_options(&mysql, MYSQL_OPT_READ_TIMEOUT, &r_timeout);
+if (ret) {
+	// error
+}
+ret = mysql_options(&mysql, MYSQL_OPT_CONNECT_TIMEOUT, &c_timeout);
+if(ret) {
+	//error
+}
+```
+
+在client中试了一下，超时机制确实生效了。
+
+## 5 最后
+
+使用libmysqlclient最大的特点就是——同步调用。
+
+在一条TCP连接上，必须顺序地执行SQL语句。因此，对于使用MYSQL协议访问数据库的后端程序，似乎就只能使用多线程框架去并发执行多条语句了。
+
+其实，只要能够保证发送到MySQL Server的数据符合特定协议的格式，那么我们完全可以自己构建这样的一个数据包，而不借助libmysqlclient或其它形式的client。这会给我们以极大的自由去选择适合我们的框架，例如基于epoll/libevent的单线程框架。
+
+当然，前提是要搞明白MYSQL协议的具体格式，这是我们下一步要学习的点。
+
