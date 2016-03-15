@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 使用libmysqlclient连接到MySQL Server
+title: libmysqlclient使用方法
 categories: mysql 
 tags: mysql 
 ---
@@ -326,15 +326,19 @@ mysql> select * from table1;
 
 猜测可能是因为Connector库版本和mysql server版本不一致导致，但貌似不影响程序的执行，暂不管他了。
 
+
 ## 4 使用超时机制
 
 libmysqlclient支持设置超时执行connect或者query操作。
 
 这对于想定期检查mysql server状态的进程/线程很有用处。
 
+
 当然，如果是client直连mysql server，完全可以使用`mysql_ping`来检测server状态。但在我的项目中，client连的是公司搭建的一套mysql集群。通过`mysql_ping`无法真实地检测到底层mysql server的状态，只能通过执行简单的sql 查询才能知道server到底正不正常。
 
+
 我们的做法是，专门起一个线程，定期执行简单的sql查询。如果服务器正常，那么能够立即返回；但是如果server出现问题了，那么检测线程就会无止境地阻塞在那里，直到server恢复正常。如果是这样的话，我的检测线程就无法把结果反馈给主线程，以便即使切换server。
+
 
 好在，libmysqlclient提供了一个接口，用以开启超时机制。
 
@@ -360,9 +364,12 @@ if(ret) {
 
 使用libmysqlclient最大的特点就是——同步调用。
 
+
 在一条TCP连接上，必须顺序地执行SQL语句。因此，对于使用MYSQL协议访问数据库的后端程序，似乎就只能使用多线程框架去并发执行多条语句了。
 
+
 其实，只要能够保证发送到MySQL Server的数据符合特定协议的格式，那么我们完全可以自己构建这样的一个数据包，而不借助libmysqlclient或其它形式的client。这会给我们以极大的自由去选择适合我们的框架，例如基于epoll/libevent的单线程框架。
+
 
 当然，前提是要搞明白MYSQL协议的具体格式，这是我们下一步要学习的点。
 
