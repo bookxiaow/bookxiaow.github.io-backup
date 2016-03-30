@@ -1,6 +1,6 @@
 ---
 layout: post
-title: C++ forbids taking the address of an unqualified or parenthesized non-static member function to form a pointer to member function
+title: boost如何传递指向类成员函数的指针
 categories: cpp 
 tags: cpp
 ---

@@ -1,3 +1,10 @@
+---
+layout: post
+title: Unicode字符集与UTF-8/UTF-16编码
+categories: 其他
+tags: unicode utf-8 utf-16
+---
+
 字符集与字符编码
 
 字符编码方案：规定了一组字符集，并且定义了将字符映射到编码的方案。例如ASCII, Unicode, GB2312等
