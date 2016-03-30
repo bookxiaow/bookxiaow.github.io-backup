@@ -39,7 +39,7 @@ Thrift文件使用了一种称为**Thrift IDL**的接口定义语言来定义接
 
 有关Thrift IDL的语法，可以参考[官方网站](https://thrift.apache.org/docs/idl)，也可以参照官方给的一个[示例thrift文件](https://git-wip-us.apache.org/repos/asf/thrift/?p=thrift.git;a=tree;f=tutorial)。
 
-#1 使用Thrift
+# 1 使用Thrift
 
 在定义好Thritf文件后，就可以生成源码了。我们以C++为例
 
@@ -56,11 +56,30 @@ $ thrift --gen cpp ./simple_service.thrift
 
 上面()中表示该文件定义的类。在Thrift文件中定义的常量和结构均包含在这两组文件中。
 
-SimpleService.cpp就比较复杂了，它包含了很多的类。其中最重要的就是`SimpleServiceProcessor`了。
+SimpleService.cpp就比较复杂了，它包含了很多的类。Thrift框架是一种分层协议，具体架构如下：
 
-## SimpleServiceProcessor
 
-SimpleServiceProcessor继承自Thrfit框架中的TProcessor类，其关系如下图所示
+```
++-------------------------------------------+
+| Server							|
+| (single-threaded, event-driven etc)		|
++-------------------------------------------+
+| Processor									|
+| (compiler generated)						|
++-------------------------------------------+
+| Protocol									|
+| (JSON, compact etc)						|
++-------------------------------------------+
+| Transport									|
+| (raw TCP, HTTP etc)						|
++-------------------------------------------+
+```
+
+我们先看看最上面的`Processor`层。
+
+## Processor
+
+在我们的例子中，SimpleServiceProcessor继承自Thrfit框架中的TProcessor类，其关系如下图所示
 
 ![Thrift Processor](/image/thrift-processor.png)
 
@@ -84,7 +103,7 @@ SimpleServiceProcessor并不会也没有必要帮助使用者实现具体的ping
 
 好了，我们已经知道消息在业务层面的处理流程了。那么接下来，我们需要知道消息从哪里来，以及到哪里去的问题。
 
-## 消息的输入和输出
+## 消息的格式化输入和输出 - Protocol层
 
 我们看一下`SimpleServiceProcessor::process`的实现，看它从哪儿读消息，以及如何将结果发送回给客户端
 
@@ -120,24 +139,20 @@ bool SimpleServiceProcessor::process(boost::shared_ptr< ::apache::thrift::protoc
 
 可以看到，消息的输入和输出都需要借助于TProtocol对象。我们接下来就看一下TProtocol是如何实现消息的输入和输出的。
 
-#2 Thrift框架
+## 数据入口与出口 -  Transport
+
+
+# 2 Thrift框架
 
 Thrift框架如下所示：
 
-```
-+-------------------------------------------+
-| Server							|
-| (single-threaded, event-driven etc)		|
-+-------------------------------------------+
-| Processor									|
-| (compiler generated)						|
-+-------------------------------------------+
-| Protocol									|
-| (JSON, compact etc)						|
-+-------------------------------------------+
-| Transport									|
-| (raw TCP, HTTP etc)						|
-+-------------------------------------------+
-```
+
+分层架构我们应该不陌生了。全世界应用最广泛的分层架构软件应该就是TCP/IP协议栈了。分层架构的好处也很显而易见：每一层各司其职，并通过严格定义的层与层之间的接口互相通信。
+
+换句话说，对于任意一层，可以使用新的实现很轻松地替换掉旧的实现，只要满足层与层之间的接口就可以。
+
+举个例子，对于我们上一节分析的Processor层，它负责从Input Transport读取消息，然后处理，然后将结果发送到Output Transport。对于Processor层来说，它仅能感知到Transport层为它提供的read/write接口，而无法知道也没有必要知道消息最终从哪儿来到哪里去，因为这都是Transport层的job。
+
+什么意思呢？比方说，我们现在要实现一个服务器，又因为Thrift协议的跨平台型，我们决定服务器使用Thrift协议开放接口给客户端使用。但是，我们有自己的服务器框架，我们仅仅想支持Thrift消息而已（Processor
 
 #3 总结
